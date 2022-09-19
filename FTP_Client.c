@@ -1,101 +1,78 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netdb.h>
+#include <arpa/inet.h>
 #include <string.h>
-#include <stdlib.h>
 
-void error(char *msg)
+void main(int argc, char *argv[])
 {
-    perror(msg);
-    exit(0);
-}
-
-int main(int argc, char *argv[])
-{
-    int sockfd, portno, n, option;
-    char ch, filename[10];
-
-    struct sockaddr_in serv_addr;
-    struct hostent *server;
-
-    char buffer[256];
-    if (argc < 3) {
-       fprintf(stderr,"usage %s hostname port\n", argv[0]);
-       exit(0);
-    }
-    portno = atoi(argv[2]);
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) 
-        error("ERROR opening socket");
-    server = gethostbyname(argv[1]);
-    if (server == NULL) {
-        fprintf(stderr,"ERROR, no such host\n");
+    if(argc < 2)
+    {
+        printf("No port given\n");
         exit(0);
     }
-    bzero((char *) &serv_addr, sizeof(serv_addr));
+    int sockfd, portno, clilen;
+    char buffer[1024];
+    struct sockaddr_in serv_addr;
+    portno = atoi(argv[1]);
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    bzero((char *)&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
-    bcopy((char *)server->h_addr,(char *)&serv_addr.sin_addr.s_addr,server->h_length);
+    serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(portno);
-    if (connect(sockfd,(struct sockaddr *)&serv_addr,sizeof(serv_addr)) < 0) 
-        error("ERROR connecting");
+    connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
     
-    //file transfer protocol
+    //FTP section
 
-    bzero(buffer,256);
-    printf("Enter option \n 1 for get request \n 2 for put request \n");
-    fgets(buffer,255,stdin);
-    option = atoi(buffer);
-    //option writting to socket
-    n = write(sockfd,buffer,strlen(buffer));
-    if (n < 0) 
-        error("ERROR writing to socket");
-    //GET request processing
-    if (option==1)
+    int  command = 1;
+    char strcommand[10];
+    char filename[40];
+    FILE *fp;
+    
+    while (command != 3)
     {
-        //read file name request
-        n = read(sockfd,buffer,255);
-        if (n < 0)
-            error("ERROR reading from socket");
-        printf("%s\n",buffer);
-        bzero(buffer,256);
-        //read file name request end
-        // reading file name
-        gets(filename);
-        strcpy(buffer,filename);
-        //reading file name end
-        //writting file name to socket
-        n = write(sockfd,buffer,strlen(buffer));
-        if (n < 0) 
-            error("ERROR writing to socket");
-        bzero(buffer,256);
-        //writting file name to socket end
-        //reading data
-        n = read(sockfd, buffer, 255);
-        if (n < 0)
-            error("ERROR reading from socket");
-        puts(buffer);
-    }
-    else if (option==2)
-    {
-        printf("Enter name of file\n");
-        gets(filename);
-        bzero(buffer,256);
-        strcpy(buffer,filename);
-        n = write(sockfd,buffer,strlen(buffer));
-        if (n < 0) 
-            error("ERROR writing to socket");
-        bzero(buffer,256);
-
-        n = read(sockfd,buffer,255);
-        if (n < 0)
-            error("ERROR reading from socket");
-        puts(buffer);
-        gets(buffer);
-        n = write(sockfd,buffer,strlen(buffer));
-        if (n < 0) 
-            error("ERROR writing to socket");
-    }
-    return 0;
+        printf("Enter 1 for GET request 2 for PUT request 3 to end program\n");
+        scanf("%d",&command);
+        sprintf(strcommand, "%d", command);
+        send(sockfd, strcommand, sizeof(strcommand), 0);
+        if(command == 1)
+        {
+            printf("Enter filename\n");
+            scanf("%s",&filename);
+            send(sockfd, filename, sizeof(filename), 0);
+            bzero(buffer,1024);
+            recv(sockfd, buffer, 1024, 0);
+            if(strcmp(buffer, "NULL")==0)
+                printf("No such a file\n");
+            else
+            {
+                fp = fopen(filename, "w");
+                fputs(buffer, fp);
+                fclose(fp);
+                printf("File downloaded successfully\n");
+            }            
+        }
+        else if(command == 2)
+        {
+            printf("Enter filename\n");
+            scanf("%s",&filename);
+            fp = fopen(filename, "r");
+            if(fp == NULL)
+            {
+                send(sockfd, "NULL", 4, 0);
+                printf("No such a file\n");
+            }
+            else
+            {
+                send(sockfd, filename, sizeof(filename), 0);
+                bzero(buffer,1024);
+                fgets(buffer, 1024, fp);
+                fclose(fp);
+                send(sockfd, buffer,sizeof(buffer), 0);
+                printf("File uploaded successfully\n");
+            }
+        }
+    }  
 }
