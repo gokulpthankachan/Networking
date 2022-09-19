@@ -21,7 +21,7 @@ void main()
         }
         else
         {
-            printf("\nDropped %d number of packets",incoming-(buck_size-store));
+            printf("\nDropped %d number of packets", incoming-(buck_size-store));
             printf("\nBucket buffer size %d out of %d", store, buck_size);
             store=buck_size;
         }
